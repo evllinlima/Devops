@@ -5,6 +5,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
+//alteracao do nome
 app.get('/api', (req, res) => {
   res.send('Olá Mundo!');
 });
