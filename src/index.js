@@ -5,8 +5,9 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
+//alteração 
 app.get('/api', (req, res) => {
-  res.send('Olá Mundo!');
+  res.send('Olá MUNDOO!');
 });
 
 app.get('/api/test', (req, res) => {
