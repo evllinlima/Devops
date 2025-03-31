@@ -7,7 +7,7 @@ app.use(express.json());
 
 //alteracao do nome
 app.get('/api', (req, res) => {
-  res.send('Olá Mundo!');
+  res.send('Olá MUNDOO!');
 });
 
 app.get('/api/test', (req, res) => {
