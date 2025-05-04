@@ -49,6 +49,19 @@ jobs:
     - name: Run tests
       run: npm test
       
+    - name: Enviar email em caso de falha
+      if: failure()
+      uses: dawidd6/action-send-mail@v3
+      with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{secrets.EMAIL_ORIGEM}}
+          password: ${{secrets.SENHA_EMAIL}}
+          subject: Falha no workflow do GitHub Actions
+          body: O worflow falhou no passo de testes.
+          to: ${{secrets.EMAIL_DESTINO}}
+          from: ${{secrets.EMAIL_ORIGEM}}
+      
     # Versionamento Semântico
     - name: Install semver
       run: npm install -g semver
