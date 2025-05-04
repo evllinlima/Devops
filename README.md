@@ -1,6 +1,6 @@
-# 🚀 Docker – Guia Rápido para Gerenciar sua API
+# 🚀 Docker – Comandos para gerenciar API
 
-Este repositório traz um conjunto prático de comandos Docker voltados para facilitar o ciclo de vida de uma API containerizada. Desde a criação da imagem até o gerenciamento do container, este guia cobre o essencial para te ajudar no dia a dia.
+Este repositório traz um conjunto de comandos Docker voltados para auxiliar o ciclo de uma API containerizada. Desde a criação da imagem até o gerenciamento do container.
 
 ---
 
