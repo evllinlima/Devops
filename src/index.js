@@ -33,10 +33,10 @@ const swaggerOptions = {
     info: {
       title: 'User API',
       version: '1.0.0',
-      description: 'CRUD de usuários com MySQL'
+      description: 'CRUD de usuários com PostgreSQL e Better Stack',
     }
   },
-  apis: ['server.js']
+  apis: ['./src/index.js']
 };
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
