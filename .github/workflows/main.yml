@@ -26,14 +26,6 @@ jobs:
       with:
         username: ${{ secrets.USUARIO_DOCKER }}
         password: ${{ secrets.SENHA_DOCKER }}
-
-    - name: Criar a imagem Docker
-      run: |
-        docker build -t ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:${{ github.run_number }} .
-
-    - name: Push para o Docker Hub
-      run: |
-        docker push ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:${{ github.run_number }}
     
     - name: Set up Node.js
       uses: actions/setup-node@v3
@@ -82,26 +74,18 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
-        # Fetch tags
         git fetch --tags
-        
-        # Get last tag
-        LAST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+        LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
         if [ -z "$LAST_TAG" ]; then
           LAST_TAG="v0.0.0"
+          COMMITS=$(git log --pretty=format:"%s")
+        else
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
         fi
-        
         echo "Última tag: $LAST_TAG"
-        
-        # Get commits since last tag
-        COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
-        
-        # Initialize version increment flags
         MAJOR=0
         MINOR=0
         PATCH=0
-        
-        # Analyze commit messages
         for COMMIT in "$COMMITS"; do
           if [[ "$COMMIT" == *"BREAKING CHANGE"* ]]; then
             MAJOR=1
@@ -111,11 +95,8 @@ jobs:
             PATCH=1
           fi
         done
-        
-        # Calculate new version
         CURRENT_VERSION=${LAST_TAG#v}
         NEW_VERSION=$CURRENT_VERSION
-        
         if [[ $MAJOR -eq 1 ]]; then
           NEW_VERSION=$(semver -i major $CURRENT_VERSION)
         elif [[ $MINOR -eq 1 ]]; then
@@ -123,27 +104,92 @@ jobs:
         elif [[ $PATCH -eq 1 ]]; then
           NEW_VERSION=$(semver -i patch $CURRENT_VERSION)
         fi
-        
         echo "Nova versão: $NEW_VERSION"
         echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
     
     - name: Update package.json version
       if: github.ref == 'refs/heads/main' && env.new_version != ''
       run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        if [ "$CURRENT_VERSION" != "${{ env.new_version }}" ]; then
         npm version ${{ env.new_version }} --no-git-tag-version
+        else
+          echo "Versão já está em $CURRENT_VERSION, não é necessário atualizar."
+        fi
     
     - name: Commit and push new version
       if: github.ref == 'refs/heads/main' && env.new_version != ''
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
         git add package.json
-        git commit -m "chore(release): version ${{ env.new_version }}"
-        git tag v${{ env.new_version }}
-        git push origin main --tags
-    
+        if ! git diff --cached --quiet; then
+          git commit -m "chore(release): version ${{ env.new_version }}"
+          git tag v${{ env.new_version }}
+          git push origin main --tags
+        else
+          echo "Nenhuma alteração para commit/tag. Pulando push."
+        fi
+
+    - name: Definir versão da imagem Docker
+      id: docker_version
+      run: |
+        if [ -z "$new_version" ]; then
+          git fetch --tags
+          LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LAST_TAG" ]; then
+            echo "Nenhuma tag encontrada. Usando v0.0.0."
+            IMAGE_VERSION="v0.0.0"
+          else
+            IMAGE_VERSION="$LAST_TAG"
+          fi
+        else
+          IMAGE_VERSION="v$new_version"
+        fi
+        echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
+
+    - name: Criar a imagem Docker
+      run: |
+        docker build -t ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:${{ env.IMAGE_VERSION }} .
+        docker tag ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:${{ env.IMAGE_VERSION }} ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:latest
+
+    - name: Push para o Docker Hub
+      run: |
+        docker push ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:${{ env.IMAGE_VERSION }}
+        docker push ${{ secrets.USUARIO_DOCKER }}/3011392323030-devops-fatec:latest
+
+    - name: Atualizar variáveis/secrets no Render
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        curl -X PATCH "https://api.render.com/v1/services/$SERVICE_ID/env-vars" \
+          -H "Authorization: Bearer $RENDER_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+        \"envVars\": [
+              {"key":"DB_HOST","value":"${{ secrets.DB_HOST }}"},
+              {"key":"DB_USER","value":"${{ secrets.DB_USER }}"},
+              {"key":"DB_PASSWORD","value":"${{ secrets.DB_PASSWORD }}"},
+              {"key":"DB_NAME","value":"${{ secrets.DB_NAME }}"},
+              {"key":"DB_PORT","value":"${{ secrets.DB_PORT }}"},
+              {"key":"JWT_SECRET","value":"${{ secrets.JWT_SECRET }}"},
+            ]
+          }'
+
+    - name: Deploy da API no Render
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        NEW_VERSION: ${{ env.new_version }}
+      run: |
+        curl -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+          -H "Authorization: Bearer $RENDER_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{\"clearCache\":true}"   
+
     # Email Notification
     - name: Send email on failure
       if: failure()
